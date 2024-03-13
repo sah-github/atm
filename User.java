@@ -4,6 +4,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
 import java.util.Scanner;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class User {
     int accno;
@@ -12,12 +14,11 @@ public class User {
     String bname;
     String branch;
 
-    User() {
-    }
-
+    //User() {}
+    
     public void start() {
+        Accounts t = new Accounts(this);
         Scanner sc = new Scanner(System.in);
-        // Test t = new Test();
         try {
             Connection c = DriverManager.getConnection("jdbc:mysql://localhost:3306/atm", "root", "Sahithi@04");
             System.out.println("1.Login \t 2.sign up");
@@ -32,20 +33,13 @@ public class User {
                     if (rs.next()) {
                         System.out.println("Enter password:");
                         this.pwd = sc.next();
+                        t.fetchDetails(this);
                         if (rs.getString(2).equals(this.pwd)) {
                             System.out.println("LOGIN SUCCESSFUL");
-                            PreparedStatement ps4 = c.prepareStatement("select * from accdetails where accno=(?)");
-                            PreparedStatement trig = c.prepareStatement(
-                                    "insert into history(amt,type,sentTo,receivedFrom) values(?,?,?,?)");
-                            ps4.setInt(1, this.accno);
-                            ResultSet ad = ps4.executeQuery();
-                            ad.next();
-                            this.balance = ad.getFloat(2);
-                            this.bname = ad.getString(3);
-                            this.branch = ad.getString(4);
                             System.out.println(
-                                    "\n1.Check Balance"+"   "+"2.Credit"+"   "+"3.Debit"+"   "+"4.Check details"+"   "+"5.Tansfer"+"   "+"6.Transaction History"+"   "+"7.Close Account"+"   "+"8.Exit");
-                            Transaction t = new Transaction();
+                                    "\n1.Check Balance" + "   " + "2.Credit" + "   " + "3.Debit" + "   "
+                                            + "4.Check details" + "   " + "5.Transfer" + "   " + "6.Transaction History"
+                                            + "   " + "7.Close Account" + "   " + "8.Exit");
                             int choice = 0;
                             boolean flag = true;
                             while (flag != false) {
@@ -53,64 +47,26 @@ public class User {
                                 choice = sc.nextInt();
                                 switch (choice) {
                                     case (1):
-                                        // float tot_amt=t.totalAmt(this);
                                         System.out.println("Current Balance=" + this.balance);
                                         break;
                                     case (2):
                                         t.credit(this);
-                                        trig.setFloat(1, t.amt);
-                                        trig.setString(2, "credited to");
-                                        trig.setInt(3, this.accno);
-                                        trig.setInt(4, this.accno);
-                                        trig.executeUpdate();
                                         break;
                                     case (3):
                                         t.withdraw(this);
-                                        trig.setFloat(1, t.amt);
-                                        trig.setString(2, "debited from");
-                                        trig.setInt(3, this.accno);
-                                        trig.setInt(4, this.accno);
-                                        trig.executeUpdate();
                                         break;
-
                                     case (4):
-                                        AccDetails ac = new AccDetails();
-                                        ac.printDetails(this);
+                                        t.printDetails(this);
                                         break;
                                     case (5):
-                                        System.out.println("Enter account number: ");
-                                        int sendTo = sc.nextInt();
-
-                                        try {
-
-                                            Statement st = c.createStatement();
-                                            ResultSet rs1 = st.executeQuery(
-                                                    "select balance from accdetails where accno = " + sendTo);
-                                            rs1.next();
-                                            float[] arr = new float[2];
-                                            arr = t.transfer(this, rs1.getInt(1));
-                                            st.executeUpdate("update accdetails set balance = " + arr[1]
-                                                    + "where accno = " + sendTo);
-                                            st.executeUpdate("update accdetails set balance = " + arr[0]
-                                                    + "where accno = " + this.accno);
-
-                                        } catch (Exception e) {
-                                            System.out.println("Invalid account number");
-                                        }
-                                        trig.setFloat(1, t.amt);
-                                        trig.setString(2, "transfered from");
-                                        trig.setInt(3, sendTo);
-                                        trig.setInt(4, this.accno);
-                                        trig.executeUpdate();
+                                        t.updateTransaction(this);
                                         break;
                                     case (6):
-                                        History hist = new History();
-                                        hist.Transaction(this);
+                                        t.TransactionDetails(this);
                                         break;
-                                    case(7):
-                                       CloseAcc cAcc=new CloseAcc();
-                                       cAcc.deleteacc(this);
-                                       break;
+                                    case (7):
+                                        t.deleteacc(this);
+                                        break;
                                     case (8):
                                         flag = false;
                                         break;
@@ -140,15 +96,12 @@ public class User {
                     this.bname = sc.next();
                     System.out.println("Enter Branch :");
                     this.branch = sc.next();
-                    Pass p=new Pass();
-                    do{
-                    System.out.println("Enter password:");
-                    this.pwd = sc.next();
-                    
-                    }
-                    while(!p.isValidPassword(this));
-                        
-                    
+                    do {
+                        System.out.println("Enter password:");
+                        this.pwd = sc.next();
+
+                    } while (!isValidPassword(this));
+
                     String insertQuery = "INSERT INTO accounts VALUES (" + this.accno + ", '" + this.pwd + "')";
                     st.executeUpdate(insertQuery);
                     ps2.setInt(1, this.accno);
@@ -168,5 +121,49 @@ public class User {
             System.out.println(e);
         }
         sc.close();
+    }
+
+    public static boolean isValidPassword(User u) {
+        String password = u.pwd;
+        if (password.length() < 8) {
+            System.out.println("Less than 8 characters");
+            return false;
+        }
+        if (!containsUppercaseLetter(password)) {
+            System.out.println("Doesn't contain UpperCase Letter");
+            return false;
+        }
+        if (!containsLowercaseLetter(password)) {
+            System.out.println("Doesn't contain LowerCase Letter");
+            return false;
+        }
+        if (!containsDigit(password)) {
+            System.out.println("Does't contain a Number");
+            return false;
+        }
+        if (!containsSpecialCharacter(password)) {
+            System.out.println("Doesn't contain Special Character");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static boolean containsUppercaseLetter(String password) {
+        return password.matches(".*[A-Z].*");
+    }
+
+    private static boolean containsLowercaseLetter(String password) {
+        return password.matches(".*[a-z].*");
+    }
+
+    private static boolean containsDigit(String password) {
+        return password.matches(".*\\d.*");
+    }
+
+    private static boolean containsSpecialCharacter(String password) {
+        Pattern pattern = Pattern.compile("[^a-zA-Z0-9]");
+        Matcher matcher = pattern.matcher(password);
+        return matcher.find();
     }
 }
